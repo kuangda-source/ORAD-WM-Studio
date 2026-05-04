@@ -169,6 +169,24 @@ def test_generation_reconstruction_training_and_replay() -> None:
         assert "success_rate" in comparison_payload["metric_keys"]
         assert any(item["run_id"] == run_id for item in comparison_payload["rows"])
 
+        job_launch = client.post(
+            "/api/jobs/launch",
+            json={
+                "label": "Reconstruct",
+                "endpoint": "/api/reconstruction/run",
+                "method": "POST",
+                "body": {"sequence_id": "seq_0001", "method": "mock-bev", "seed": 91},
+            },
+        )
+        assert job_launch.status_code == 200
+        job_payload = job_launch.json()
+        assert job_payload["job"]["status"] == "completed"
+        assert job_payload["job"]["kind"] == "reconstruction"
+        assert job_payload["job"]["run_id"] == job_payload["result"]["run_id"]
+        jobs = client.get("/api/jobs")
+        assert jobs.status_code == 200
+        assert any(item["job_id"] == job_payload["job"]["job_id"] for item in jobs.json())
+
 
 def test_rugd_style_import_endpoint() -> None:
     source_root = Path("data/demo/sequences/seq_0001").resolve()

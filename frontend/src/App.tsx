@@ -25,6 +25,7 @@ import { api } from './api'
 import type {
   DatasetSummary,
   DatasetSourceCard,
+  JobRecord,
   Provenance,
   ModelCatalogItem,
   ModelLaunchAction,
@@ -173,6 +174,7 @@ function statusText(status: string): string {
     warning: 'WARN',
     missing: 'MISSING',
     placeholder: 'PLACEHOLDER',
+    queued: 'QUEUED',
     completed: 'DONE',
     failed: 'FAILED',
     running: 'RUNNING',
@@ -425,6 +427,28 @@ function RunComparisonPanel({
   )
 }
 
+function JobQueuePanel({ jobs, onRefresh }: { jobs: JobRecord[]; onRefresh: () => void }) {
+  return (
+    <div className="jobs-panel">
+      <button className="mini-refresh" onClick={onRefresh} type="button">
+        <RefreshCcw size={13} />
+        Refresh
+      </button>
+      {jobs.length === 0 ? <div className="empty-run">No jobs</div> : null}
+      {jobs.slice(0, 8).map((job) => (
+        <div className="job-row" key={job.job_id}>
+          <div>
+            <strong>{job.label}</strong>
+            <small>{job.kind} / {job.sequence_id ?? 'NaN sequence'}</small>
+            <small>{new Date(job.updated_at).toLocaleString()}</small>
+          </div>
+          <span className={`quality-pill ${job.status}`}>{statusText(job.status)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function DatasetQualityPanel({ quality }: { quality?: SequenceQuality }) {
   if (!quality) {
     return <div className="quality-empty">Quality: NaN</div>
@@ -477,7 +501,18 @@ function DatasetSourceCardPanel({ card }: { card?: DatasetSourceCard }) {
   )
 }
 
+function tryParseJsonObject(text: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(text) as unknown
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null
+  } catch {
+    return null
+  }
+}
+
 function ModelCatalogPanel({ items, onLaunch }: { items: ModelCatalogItem[]; onLaunch: (action: ModelLaunchAction) => void }) {
+  const [bodyDrafts, setBodyDrafts] = useState<Record<string, string>>({})
+
   if (items.length === 0) return <div className="quality-empty">Model catalog: NaN</div>
   return (
     <div className="model-catalog">
@@ -495,17 +530,32 @@ function ModelCatalogPanel({ items, onLaunch }: { items: ModelCatalogItem[]; onL
             {item.required_streams.map((stream) => <span key={stream}>{stream}</span>)}
           </div>
           <div className="launch-actions">
-            {item.launch_actions.map((action) => (
-              <button
-                key={`${item.id}-${action.id}`}
-                disabled={!action.enabled}
-                onClick={() => onLaunch(action)}
-                title={action.disabled_reason ?? JSON.stringify(action.body)}
-                type="button"
-              >
-                {action.label}
-              </button>
-            ))}
+            {item.launch_actions.map((action) => {
+              const key = `${item.id}-${action.id}`
+              const bodyText = bodyDrafts[key] ?? JSON.stringify(action.body, null, 2)
+              const parsedBody = tryParseJsonObject(bodyText)
+              return (
+                <div className="launch-action-editor" key={key}>
+                  <button
+                    disabled={!action.enabled || parsedBody === null}
+                    onClick={() => parsedBody && onLaunch({ ...action, body: parsedBody })}
+                    title={parsedBody === null ? 'Invalid JSON body' : action.disabled_reason ?? JSON.stringify(parsedBody)}
+                    type="button"
+                  >
+                    {action.label}
+                  </button>
+                  <details>
+                    <summary>params</summary>
+                    <textarea
+                      value={bodyText}
+                      onChange={(event) => setBodyDrafts((current) => ({ ...current, [key]: event.target.value }))}
+                      spellCheck={false}
+                    />
+                    {parsedBody === null ? <small className="model-blocker">Invalid JSON object</small> : null}
+                  </details>
+                </div>
+              )
+            })}
           </div>
           {item.blockers.length > 0 ? <small className="model-blocker">{item.blockers[0]}</small> : null}
         </div>
@@ -597,6 +647,7 @@ function App() {
   const [rlTrain, setRlTrain] = useState<RlTrainResponse | null>(null)
   const [replay, setReplay] = useState<ReplayResponse | null>(null)
   const [runs, setRuns] = useState<RunRecord[]>([])
+  const [jobs, setJobs] = useState<JobRecord[]>([])
   const [runSource, setRunSource] = useState<'all' | Provenance['source']>('all')
   const [compareKind, setCompareKind] = useState('all')
   const [comparison, setComparison] = useState<RunComparisonResponse | null>(null)
@@ -626,6 +677,7 @@ function App() {
         setVehicleDraft(loadedVehicles[0] ?? fallbackVehicle)
         await refreshQuality()
         await refreshSourceCards()
+        await refreshJobs()
         if (firstSequence) await refreshModelCatalog(firstSequence)
         setNotice('Ready')
       } catch (error) {
@@ -700,6 +752,15 @@ function App() {
       setComparison(loadedComparison)
     } catch {
       setComparison(null)
+    }
+  }
+
+  async function refreshJobs() {
+    try {
+      const loadedJobs = await api.jobs()
+      setJobs(loadedJobs)
+    } catch {
+      setJobs([])
     }
   }
 
@@ -783,7 +844,8 @@ function App() {
     await runAction(
       action.label,
       async () => {
-        const result = await api.launchAction(action)
+        const launched = await api.launchAction(action)
+        const result = launched.result ?? {}
         if (action.endpoint === '/api/rl/train' && typeof result.run_id === 'string') {
           const replayData = await api.replay(result.run_id)
           return { result, replayData }
@@ -801,6 +863,7 @@ function App() {
       onDone(value)
       await refreshRuns()
       await refreshComparison()
+      await refreshJobs()
       await refreshQuality()
       await refreshSourceCards()
       await refreshModelCatalog()
@@ -815,8 +878,8 @@ function App() {
   const generateScene = (focus: 'front' | 'bev' | 'recon' = 'front') =>
     runAction(
       'Generate scene',
-      () =>
-        api.generateScene({
+      async () => {
+        const body = {
           terrain,
           weather,
           task,
@@ -824,7 +887,10 @@ function App() {
           seed: 42 + prompt.length + terrain.length,
           obstacle_density: soil === 'gravel' ? 0.42 : 0.34,
           slope: terrain === 'mountain' ? 0.55 : 0.38,
-        }),
+        }
+        const launched = await api.launchJob('Generate scene', '/api/scenes/generate', body)
+        return launched.result as SceneGenerateResponse
+      },
       (value) => {
         setScene(value)
         setActiveView(focus)
@@ -1178,6 +1244,10 @@ function App() {
                 <RefreshCcw size={15} />
                 Refresh runs
               </button>
+              <button className="secondary-button" onClick={() => void refreshJobs()} type="button">
+                <RefreshCcw size={15} />
+                Refresh jobs
+              </button>
             </section>
           </div>
 
@@ -1337,6 +1407,13 @@ function App() {
                   </div>
                   <RunComparisonPanel comparison={comparison} kind={compareKind} onKindChange={setCompareKind} />
                 </section>
+                <section className="page-card">
+                  <div className="section-title">
+                    <RefreshCcw size={14} />
+                    Jobs
+                  </div>
+                  <JobQueuePanel jobs={jobs} onRefresh={() => void refreshJobs()} />
+                </section>
               </div>
             ) : null}
             {showExperimentViewport && activeView === 'front' ? (
@@ -1477,6 +1554,14 @@ function App() {
               Runs
             </div>
             <RunRegistryPanel runs={runs} source={runSource} onSourceChange={setRunSource} onSelectRun={openRunDetail} />
+          </section>
+
+          <section className="right-section">
+            <div className="section-title">
+              <RefreshCcw size={14} />
+              Jobs
+            </div>
+            <JobQueuePanel jobs={jobs} onRefresh={() => void refreshJobs()} />
           </section>
 
           <section className="right-section">

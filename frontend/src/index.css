@@ -806,6 +806,24 @@ button:disabled {
   gap: 10px;
 }
 
+.jobs-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.mini-refresh {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #d4dcd4;
+  border-radius: 6px;
+  background: #fbfcfa;
+  color: #40524a;
+  font-size: 12px;
+}
+
 .source-filter {
   display: flex;
   flex-wrap: wrap;
@@ -839,7 +857,8 @@ button:disabled {
   font-size: 12px;
 }
 
-.run-row {
+.run-row,
+.job-row {
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -859,19 +878,23 @@ button:disabled {
 }
 
 .run-row strong,
-.run-row small {
+.run-row small,
+.job-row strong,
+.job-row small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.run-row strong {
+.run-row strong,
+.job-row strong {
   color: #26342f;
   font-size: 13px;
 }
 
 .run-row small,
+.job-row small,
 .empty-run {
   margin-top: 2px;
   color: #718078;
@@ -1128,6 +1151,7 @@ button:disabled {
 }
 
 .quality-pill.warning,
+.quality-pill.queued,
 .quality-pill.running,
 .quality-pill.mock {
   border-color: #c8b274;
@@ -1214,12 +1238,18 @@ button:disabled {
 
 .launch-actions {
   grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 6px;
 }
 
-.launch-actions button {
+.launch-action-editor {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.launch-action-editor button {
   min-height: 28px;
   display: inline-flex;
   align-items: center;
@@ -1233,11 +1263,36 @@ button:disabled {
   font-weight: 700;
 }
 
-.launch-actions button:disabled {
+.launch-action-editor button:disabled {
   cursor: not-allowed;
   color: #7d8580;
   background: #eef0ed;
   border-color: #d8ded6;
+}
+
+.launch-action-editor details {
+  min-width: 0;
+}
+
+.launch-action-editor summary {
+  color: #607068;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.launch-action-editor textarea {
+  width: 100%;
+  min-height: 126px;
+  margin-top: 5px;
+  padding: 8px;
+  border: 1px solid #d6ddd5;
+  border-radius: 6px;
+  background: #f9fbf8;
+  color: #22322b;
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  resize: vertical;
 }
 
 .drawer-backdrop {

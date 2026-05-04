@@ -73,10 +73,11 @@ Runs       实验记录视图：run 过滤、对比、artifact 预览和 export 
 3. 在 Dashboard 左侧保存当前 sequence 的标签摘要。
 4. 切到 `Scene Lab`，用地形/土壤/天气/任务/Prompt 生成 synthetic BEV 或前视图。
 5. 回到 Dashboard，在右侧 Model Catalog 查看当前 sequence 能跑哪些模型。
-6. 对 RUGD-style sequence 运行 `Train Terrain` 和 `Segment`。
-7. 对 TartanDrive-style sequence 运行 `Train Traj` 和 `Predict Traj`。
-8. 打开 `Runs` 检查每个实验的 provenance、metrics、artifacts 和 export bundle。
-9. 使用 Compare 面板比较同类 run 的标量指标。
+6. 展开 Model Catalog launch action 的 `params`，按需编辑 JSON 参数。
+7. 对 RUGD-style sequence 运行 `Train Terrain` 和 `Segment`。
+8. 对 TartanDrive-style sequence 运行 `Train Traj` 和 `Predict Traj`。
+9. 打开 `Runs` 检查每个实验的 provenance、metrics、artifacts、job 状态和 export bundle。
+10. 使用 Compare 面板比较同类 run 的标量指标。
 
 ## 5. Diffusion 视频生成入口
 
@@ -89,7 +90,40 @@ GET  /api/video-generation/{run_id}
 
 第一版先接 image-to-video adapter，把当前 front-view frame 或 Scene Lab 生成的 keyframe 作为第一帧，生成 3-5 秒短视频。输出必须标记为 `synthetic`，并保存在 Run Registry 中。
 
-## 6. 导入 RUGD-style 数据
+## 6. Job Registry 和参数编辑
+
+Model Catalog 和 Scene Lab 的启动动作现在先进入 Job Registry：
+
+```text
+queued -> running -> completed/failed
+```
+
+API：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/api/jobs
+Invoke-RestMethod http://127.0.0.1:8000/api/jobs/{job_id}
+```
+
+通过 job 统一启动动作：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/api/jobs/launch `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"label":"Reconstruct","endpoint":"/api/reconstruction/run","method":"POST","body":{"sequence_id":"seq_0001","method":"mock-bev","seed":17}}'
+```
+
+当前实现是“同步执行 + 状态记录”，目的是兼容现有 demo 并把接口形状固定下来。后续 diffusion、LiDAR 重建和更重的 PyTorch 训练可以把同一个 job API 替换成真正后台执行。
+
+前端：
+
+- Dashboard 右侧显示 `Jobs` 面板。
+- Runs 页面也显示最近 jobs。
+- 每个 Model Catalog launch action 都有 `params` JSON 编辑器。
+- JSON 非法时按钮禁用，不会提交半坏参数。
+
+## 7. 导入 RUGD-style 数据
 
 RUGD-style 导入适合做地形语义和 traversability 训练。
 
@@ -127,7 +161,7 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/model-catalog?sequence_id=rugd_mini
 - terrain 模型为 `READY / real_data`
 - 轨迹相关模型通常是 `PLACEHOLDER`，因为 RUGD adapter 没有真实轨迹
 
-## 7. 导入 TartanDrive-style 数据
+## 8. 导入 TartanDrive-style 数据
 
 TartanDrive-style 导入适合做真实 ego pose/action 和轨迹预测。
 
@@ -174,7 +208,7 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/model-catalog?sequence_id=tartandri
 - `TinyTrajGRU` 为 `READY / real_data`
 - action-conditioned BEV/world model 仍可能因为缺少真实 occupancy/BEV 而保持 `BLOCKED`
 
-## 8. 指标可信度规则
+## 9. 指标可信度规则
 
 UI 不把 mock 数值伪装成真实结果：
 
@@ -188,7 +222,7 @@ UI 不把 mock 数值伪装成真实结果：
 
 导师汇报时建议直接展示 Source Card、Dataset Quality 和 Run Drawer，这三处能说明“哪些是真的、哪些还只是框架占位”。
 
-## 9. 常用验证命令
+## 10. 常用验证命令
 
 后端测试：
 
@@ -207,6 +241,7 @@ npm --prefix frontend run build
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/api/runs
 Invoke-RestMethod "http://127.0.0.1:8000/api/runs/compare?source=real_data"
+Invoke-RestMethod http://127.0.0.1:8000/api/jobs
 ```
 
 导出单个 run：
@@ -215,7 +250,7 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/runs/compare?source=real_data"
 Invoke-RestMethod http://127.0.0.1:8000/api/runs/{run_id}/export
 ```
 
-## 10. 后续接模型和数据的原则
+## 11. 后续接模型和数据的原则
 
 优先新增 adapter，而不是改 UI：
 

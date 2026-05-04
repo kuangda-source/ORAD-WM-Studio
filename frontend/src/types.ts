@@ -74,6 +74,28 @@ export type RunComparisonResponse = {
   rows: RunComparisonRow[]
 }
 
+export type JobRecord = {
+  job_id: string
+  kind: string
+  label: string
+  endpoint: string
+  method: 'POST' | 'GET'
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  sequence_id: string | null
+  source: Provenance['source'] | null
+  run_id: string | null
+  request: Record<string, unknown>
+  result: Record<string, unknown> | null
+  error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type JobLaunchResponse = {
+  job: JobRecord
+  result: Record<string, unknown> | null
+}
+
 export type QualityItem = {
   key: string
   label: string

@@ -303,6 +303,32 @@ Export API:
 Invoke-RestMethod http://127.0.0.1:8000/api/runs/{run_id}/export
 ```
 
+## Job Registry
+
+Model Catalog launch actions and Scene Lab generation now go through a lightweight job layer:
+
+```text
+queued -> running -> completed/failed
+```
+
+API:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/api/jobs
+Invoke-RestMethod http://127.0.0.1:8000/api/jobs/{job_id}
+```
+
+Launch through the job API:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/api/jobs/launch `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"label":"Reconstruct","endpoint":"/api/reconstruction/run","method":"POST","body":{"sequence_id":"seq_0001","method":"mock-bev","seed":17}}'
+```
+
+The current implementation executes synchronously while recording lifecycle state. That keeps the demo responsive and gives future long-running adapters a stable API shape. The frontend shows recent jobs and exposes editable JSON params for every Model Catalog launch action.
+
 ## Dataset Quality
 
 Dataset quality checks are implemented as a lightweight adapter-facing contract. They do not make the dataset "good" or "bad"; they make missing streams explicit before a model consumes them.
@@ -401,7 +427,8 @@ Frontend:
 - The right panel now shows `Model Catalog` instead of a fake numeric leaderboard.
 - Each row shows status, provenance source, required streams, and the first blocker.
 - Each row can expose launch buttons generated from backend `launch_actions`.
-- Launch actions call existing API endpoints with backend-provided default request bodies, then refresh runs, quality, and catalog state.
+- Launch actions go through `/api/jobs/launch` with backend-provided default request bodies, then refresh jobs, runs, quality, and catalog state.
+- Each launch action exposes an editable JSON parameter form in the frontend.
 - Legacy hard-coded model buttons are no longer the primary path; the left panel is kept for data import, annotation, and prompt scene generation.
 - This makes it clear why RUGD can run terrain segmentation but not real trajectory or action-conditioned world modeling.
 

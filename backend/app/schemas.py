@@ -84,6 +84,35 @@ class RunComparisonResponse(BaseModel):
     rows: list[RunComparisonRow] = Field(default_factory=list)
 
 
+class JobRecord(BaseModel):
+    job_id: str
+    kind: str
+    label: str
+    endpoint: str
+    method: Literal["POST", "GET"] = "POST"
+    status: Literal["queued", "running", "completed", "failed"] = "queued"
+    sequence_id: str | None = None
+    source: Literal["real_data", "synthetic", "mock", "toy_env", "placeholder"] | None = None
+    run_id: str | None = None
+    request: dict[str, Any] = Field(default_factory=dict)
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class JobLaunchRequest(BaseModel):
+    label: str
+    endpoint: str
+    method: Literal["POST", "GET"] = "POST"
+    body: dict[str, Any] = Field(default_factory=dict)
+
+
+class JobLaunchResponse(BaseModel):
+    job: JobRecord
+    result: dict[str, Any] | None = None
+
+
 class QualityItem(BaseModel):
     key: str
     label: str

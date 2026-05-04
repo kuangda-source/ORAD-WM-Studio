@@ -1,6 +1,8 @@
 import type {
   DatasetSummary,
   DatasetSourceCard,
+  JobLaunchResponse,
+  JobRecord,
   ReconstructionResponse,
   ModelCatalogItem,
   ModelLaunchAction,
@@ -47,17 +49,29 @@ export const api = {
   },
   run: (runId: string) => request<RunRecord>(`/api/runs/${runId}`),
   exportRun: (runId: string) => request<RunExportResponse>(`/api/runs/${runId}/export`),
+  jobs: () => request<JobRecord[]>('/api/jobs'),
+  job: (jobId: string) => request<JobRecord>(`/api/jobs/${jobId}`),
   datasetQuality: () => request<SequenceQuality[]>('/api/datasets/quality'),
   datasetSourceCards: () => request<DatasetSourceCard[]>('/api/datasets/source-cards'),
   sequenceSourceCard: (id: string) => request<DatasetSourceCard>(`/api/sequences/${id}/source-card`),
   modelCatalog: (sequenceId: string) => request<ModelCatalogItem[]>(`/api/model-catalog?sequence_id=${encodeURIComponent(sequenceId)}`),
   launchAction: (action: ModelLaunchAction) => {
     if (!action.endpoint) throw new Error(action.disabled_reason ?? 'Launch endpoint is not available')
-    return request<Record<string, unknown>>(action.endpoint, {
-      method: action.method,
-      body: action.method === 'POST' ? JSON.stringify(action.body) : undefined,
+    return request<JobLaunchResponse>('/api/jobs/launch', {
+      method: 'POST',
+      body: JSON.stringify({
+        label: action.label,
+        endpoint: action.endpoint,
+        method: action.method,
+        body: action.body,
+      }),
     })
   },
+  launchJob: (label: string, endpoint: string, body: Record<string, unknown>, method: 'POST' | 'GET' = 'POST') =>
+    request<JobLaunchResponse>('/api/jobs/launch', {
+      method: 'POST',
+      body: JSON.stringify({ label, endpoint, method, body }),
+    }),
   importRugd: (body: unknown) =>
     request<RUGDImportResponse>('/api/public-datasets/rugd/import', { method: 'POST', body: JSON.stringify(body) }),
   importTartanDrive: (body: unknown) =>

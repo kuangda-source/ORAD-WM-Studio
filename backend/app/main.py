@@ -14,6 +14,9 @@ from .schemas import (
     DatasetImportRequest,
     DatasetSummary,
     EvaluationResponse,
+    JobLaunchRequest,
+    JobLaunchResponse,
+    JobRecord,
     ReconstructionRequest,
     ReconstructionResponse,
     ReplayResponse,
@@ -49,6 +52,7 @@ from .schemas import (
 from .services.annotations import save_annotation
 from .services.datasets import dataset_quality, dataset_source_cards, get_sequence, scan_dataset, sequence_quality, sequence_source_card
 from .services.evaluation import evaluate_run
+from .services.jobs import get_job_record, launch_job, list_job_records
 from .services.model_catalog import model_catalog
 from .services.public_datasets import import_rugd_dataset, import_tartandrive_dataset
 from .services.reconstruction import run_reconstruction
@@ -126,6 +130,21 @@ def read_run(run_id: str) -> RunRecord:
 @app.get("/api/runs/{run_id}/export", response_model=RunExportResponse)
 def export_run(run_id: str) -> RunExportResponse:
     return export_run_record(run_id)
+
+
+@app.get("/api/jobs", response_model=list[JobRecord])
+def list_jobs(status: str | None = None, kind: str | None = None, limit: int = 50) -> list[JobRecord]:
+    return list_job_records(status=status, kind=kind, limit=max(1, min(limit, 200)))
+
+
+@app.get("/api/jobs/{job_id}", response_model=JobRecord)
+def read_job(job_id: str) -> JobRecord:
+    return get_job_record(job_id)
+
+
+@app.post("/api/jobs/launch", response_model=JobLaunchResponse)
+def create_job_launch(payload: JobLaunchRequest) -> JobLaunchResponse:
+    return launch_job(payload)
 
 
 @app.post("/api/datasets", response_model=DatasetSummary)

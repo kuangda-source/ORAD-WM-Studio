@@ -126,6 +126,28 @@
 - 视频 diffusion 被放在合成数据支路，不污染真实数据评估和模型指标。
 - 后续接 `POST /api/video-generation/run` 时，不需要再次重构主页信息架构。
 
+## 2026-05-04：Job Registry 和参数表单
+
+完成内容：
+
+- 后端新增 `jobs` 表。
+- 新增 API：
+  - `GET /api/jobs`
+  - `GET /api/jobs/{job_id}`
+  - `POST /api/jobs/launch`
+- Job 记录包含 `job_id`、`kind`、`endpoint`、`request`、`result`、`status`、`run_id`、`source`、`created_at`、`updated_at`。
+- 当前 job lifecycle 已记录 `queued -> running -> completed/failed`。
+- Model Catalog launch action 改为走 `/api/jobs/launch`。
+- Scene Lab 的 `Generate Image/BEV` 也改为走 job launch。
+- 前端 Dashboard 和 Runs 页面增加 Jobs 面板。
+- Model Catalog 每个 launch action 增加 `params` JSON 编辑器。
+
+优化点：
+
+- 现在仍同步执行，保证 demo 简洁稳定；接口已经为后续后台队列留好形状。
+- diffusion 视频、LiDAR 重建、大模型训练以后都可以接同一个 job API。
+- 参数不再只能用后端默认值，前端可以直接调整 epochs、seed、horizon、frame_index 等。
+
 ## 当前状态
 
 已打通：
@@ -142,10 +164,12 @@
 - run registry / compare / export
 - source cards / quality cards / model catalog
 - Scene Lab 独立合成数据工作区
+- Job Registry / launch action parameter editor
 
 仍是占位或待增强：
 
 - diffusion / image-to-video generation adapter
+- 真正异步后台执行器和取消任务
 - 真实 LiDAR/depth BEV 重建
 - 完整 TartanDrive 原始格式解析
 - RELLIS-3D LiDAR/camera/calibration adapter
