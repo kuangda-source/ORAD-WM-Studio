@@ -53,19 +53,43 @@ frontend http://127.0.0.1:5173
 
 前端通过 Vite 代理访问 `/api`、`/assets` 和 `/artifacts`。
 
-## 3. 推荐演示流程
+## 3. 页面结构
+
+顶部导航现在分成四个工作区：
+
+```text
+Dashboard  主闭环视图：数据、模型目录、预测/重建/回放和可信指标
+Scene Lab  合成场景视图：地形、土壤、天气、任务、Prompt 和后续视频生成入口
+Dataset    数据导入视图：RUGD、TartanDrive-style、Source Card、Dataset Quality
+Runs       实验记录视图：run 过滤、对比、artifact 预览和 export bundle
+```
+
+这个拆分是为了让主页第一眼更像“越野世界模型实验平台”，而不是 prompt 生成器。地形/天气/Prompt 这组控件只在 `Scene Lab` 出现，生成结果都按 synthetic provenance 记录，不和真实数据指标混在一起。
+
+## 4. 推荐演示流程
 
 1. 打开前端，选择 `seq_0001` 或导入后的真实数据 sequence。
 2. 查看 Source Card 和 Dataset Quality，确认哪些流是 `OK`、`MISSING` 或 `PLACEHOLDER`。
-3. 在左侧做 terrain/weather/task 标注并保存。
-4. 用 Prompt 生成一个程序化越野场景。
-5. 在右侧 Model Catalog 查看当前 sequence 能跑哪些模型。
+3. 在 Dashboard 左侧保存当前 sequence 的标签摘要。
+4. 切到 `Scene Lab`，用地形/土壤/天气/任务/Prompt 生成 synthetic BEV 或前视图。
+5. 回到 Dashboard，在右侧 Model Catalog 查看当前 sequence 能跑哪些模型。
 6. 对 RUGD-style sequence 运行 `Train Terrain` 和 `Segment`。
 7. 对 TartanDrive-style sequence 运行 `Train Traj` 和 `Predict Traj`。
-8. 打开 Runs 面板检查每个实验的 provenance、metrics、artifacts 和 export bundle。
+8. 打开 `Runs` 检查每个实验的 provenance、metrics、artifacts 和 export bundle。
 9. 使用 Compare 面板比较同类 run 的标量指标。
 
-## 4. 导入 RUGD-style 数据
+## 5. Diffusion 视频生成入口
+
+`Scene Lab` 中的 `Generate Video` 当前是 planned 状态，不会产生假视频或假 run。建议下一步新增：
+
+```text
+POST /api/video-generation/run
+GET  /api/video-generation/{run_id}
+```
+
+第一版先接 image-to-video adapter，把当前 front-view frame 或 Scene Lab 生成的 keyframe 作为第一帧，生成 3-5 秒短视频。输出必须标记为 `synthetic`，并保存在 Run Registry 中。
+
+## 6. 导入 RUGD-style 数据
 
 RUGD-style 导入适合做地形语义和 traversability 训练。
 
@@ -103,7 +127,7 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/model-catalog?sequence_id=rugd_mini
 - terrain 模型为 `READY / real_data`
 - 轨迹相关模型通常是 `PLACEHOLDER`，因为 RUGD adapter 没有真实轨迹
 
-## 5. 导入 TartanDrive-style 数据
+## 7. 导入 TartanDrive-style 数据
 
 TartanDrive-style 导入适合做真实 ego pose/action 和轨迹预测。
 
@@ -150,7 +174,7 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/model-catalog?sequence_id=tartandri
 - `TinyTrajGRU` 为 `READY / real_data`
 - action-conditioned BEV/world model 仍可能因为缺少真实 occupancy/BEV 而保持 `BLOCKED`
 
-## 6. 指标可信度规则
+## 8. 指标可信度规则
 
 UI 不把 mock 数值伪装成真实结果：
 
@@ -164,7 +188,7 @@ UI 不把 mock 数值伪装成真实结果：
 
 导师汇报时建议直接展示 Source Card、Dataset Quality 和 Run Drawer，这三处能说明“哪些是真的、哪些还只是框架占位”。
 
-## 7. 常用验证命令
+## 9. 常用验证命令
 
 后端测试：
 
@@ -191,7 +215,7 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/runs/compare?source=real_data"
 Invoke-RestMethod http://127.0.0.1:8000/api/runs/{run_id}/export
 ```
 
-## 8. 后续接模型和数据的原则
+## 10. 后续接模型和数据的原则
 
 优先新增 adapter，而不是改 UI：
 

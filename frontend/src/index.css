@@ -60,6 +60,32 @@ button:disabled {
   min-width: 0;
 }
 
+.top-nav {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 260px;
+}
+
+.top-nav button {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #506159;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.top-nav button.active {
+  border-color: #87bca9;
+  color: #105f43;
+  background: #e7f3ee;
+}
+
 .brand strong {
   font-size: 17px;
   color: #18231f;
@@ -168,6 +194,39 @@ button:disabled {
   display: grid;
   grid-template-rows: 58px minmax(420px, 1fr) 68px;
   background: #f4f6f2;
+}
+
+.center-panel.dataset,
+.center-panel.runs {
+  grid-template-rows: 58px minmax(420px, 1fr);
+}
+
+.dashboard-left,
+.dataset-left,
+.runs-left,
+.scene-lab-left-head,
+.legacy-left-controls,
+.dashboard-right,
+.scene-lab-right,
+.dataset-right,
+.runs-right {
+  display: none;
+}
+
+.workspace.dashboard .dashboard-left,
+.workspace.dashboard .dashboard-right,
+.workspace.scene-lab .scene-lab-left-head,
+.workspace.scene-lab .legacy-left-controls,
+.workspace.scene-lab .scene-lab-right,
+.workspace.dataset .dataset-left,
+.workspace.dataset .dataset-right,
+.workspace.runs .runs-left,
+.workspace.runs .runs-right {
+  display: block;
+}
+
+.workspace.scene-lab .legacy-left-controls > .control-block:first-child {
+  display: none;
 }
 
 .control-block,
@@ -293,6 +352,84 @@ button:disabled {
   line-height: 1.4;
 }
 
+.workspace-summary {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 0 9px;
+  border: 1px solid #dbe2da;
+  border-radius: 6px;
+  color: #607068;
+  background: #fbfcf9;
+  font-size: 12px;
+}
+
+.workspace-summary strong {
+  color: #21332b;
+  font-weight: 750;
+}
+
+.label-summary {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 7px 10px;
+  margin-bottom: 10px;
+  color: #64736c;
+  font-size: 12px;
+}
+
+.label-summary b {
+  min-width: 0;
+  color: #20332a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compact-note {
+  min-height: 64px;
+}
+
+.scene-lab-intro p {
+  margin: 0 0 7px;
+  color: #3f5048;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.scene-lab-intro small,
+.warning-note {
+  display: block;
+  color: #68776f;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.warning-note {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid #e2c775;
+  border-radius: 6px;
+  color: #705b15;
+  background: #fff6d8;
+}
+
+.scene-action-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.secondary-button.planned:disabled {
+  cursor: not-allowed;
+  color: #68766f;
+  background: #f0f2ef;
+  border-color: #d7ddd6;
+}
+
 .view-toolbar {
   display: flex;
   align-items: center;
@@ -349,6 +486,44 @@ button:disabled {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.page-viewport {
+  height: 100%;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  overflow: auto;
+  background: #e8ece7;
+}
+
+.dataset-workspace {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.runs-workspace {
+  grid-template-columns: minmax(360px, 1.1fr) minmax(280px, 0.9fr);
+}
+
+.page-card {
+  min-width: 0;
+  min-height: 0;
+  padding: 14px;
+  border: 1px solid #cfd7cd;
+  border-radius: 8px;
+  background: #fbfcf9;
+  overflow: auto;
+}
+
+.page-card.wide {
+  min-height: 360px;
+}
+
+.page-card > .quality-panel,
+.page-card > .source-card {
+  margin-top: 0;
+  border: 0;
+  background: transparent;
 }
 
 .empty-view {
@@ -1383,8 +1558,15 @@ button:disabled {
   }
 
   .brand,
-  .top-actions {
+  .top-actions,
+  .top-nav {
     flex-wrap: wrap;
+  }
+
+  .top-nav {
+    justify-content: flex-start;
+    min-width: 0;
+    margin-top: 8px;
   }
 
   .left-panel,
@@ -1406,7 +1588,9 @@ button:disabled {
   .map-grid,
   .map-grid.three,
   .map-grid.four,
-  .prediction-grid {
+  .prediction-grid,
+  .dataset-workspace,
+  .runs-workspace {
     grid-template-columns: 1fr;
   }
 

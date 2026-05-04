@@ -108,6 +108,24 @@
 - 只要用户导入含 pose/action 的 TartanDrive-style mini subset，`TinyTrajGRU` 会变成 `READY / real_data`。
 - action-conditioned BEV/world model 仍保持 blocked，直到真实 BEV/occupancy 接上。
 
+## 2026-05-04：Scene Lab 页面拆分
+
+完成内容：
+
+- 顶部导航增加 `Dashboard / Scene Lab / Dataset / Runs`。
+- Dashboard 左侧从场景生成按钮改成数据工作区和当前标签摘要。
+- 地形、土壤、天气、任务、Prompt 迁移到独立 `Scene Lab`。
+- `Scene Lab` 增加 `Generate Image`、`Generate BEV` 和 `Generate Video` planned 入口。
+- Dataset 页面集中放置 RUGD、TartanDrive-style 导入、Source Card 和 Dataset Quality。
+- Runs 页面集中放置 run registry 和 compare 面板。
+- Prompt 与结构化天气存在冲突时，在 Scene Lab 显示 warning，并保持 synthetic provenance。
+
+优化点：
+
+- 主页第一眼更像越野世界模型实验平台，不再像单纯 prompt 生成器。
+- 视频 diffusion 被放在合成数据支路，不污染真实数据评估和模型指标。
+- 后续接 `POST /api/video-generation/run` 时，不需要再次重构主页信息架构。
+
 ## 当前状态
 
 已打通：
@@ -123,9 +141,11 @@
 - vehicle JSON CRUD
 - run registry / compare / export
 - source cards / quality cards / model catalog
+- Scene Lab 独立合成数据工作区
 
 仍是占位或待增强：
 
+- diffusion / image-to-video generation adapter
 - 真实 LiDAR/depth BEV 重建
 - 完整 TartanDrive 原始格式解析
 - RELLIS-3D LiDAR/camera/calibration adapter

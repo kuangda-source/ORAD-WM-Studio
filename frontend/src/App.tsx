@@ -106,6 +106,15 @@ const compareKinds = [
   { label: 'RL train', value: 'rl_train' },
 ]
 
+type AppPage = 'dashboard' | 'scene-lab' | 'dataset' | 'runs'
+
+const pageTabs: Array<{ label: string; value: AppPage }> = [
+  { label: 'Dashboard', value: 'dashboard' },
+  { label: 'Scene Lab', value: 'scene-lab' },
+  { label: 'Dataset', value: 'dataset' },
+  { label: 'Runs', value: 'runs' },
+]
+
 const fallbackVehicle: Vehicle = {
   id: 'ugv_default',
   name: 'Offroad UGV',
@@ -563,6 +572,7 @@ function RunDetailDrawer({
 function App() {
   const [datasets, setDatasets] = useState<DatasetSummary[]>([])
   const [sequence, setSequence] = useState<SequenceDetail | null>(null)
+  const [activePage, setActivePage] = useState<AppPage>('dashboard')
   const [terrain, setTerrain] = useState('mountain')
   const [soil, setSoil] = useState('gravel')
   const [weather, setWeather] = useState('sunny')
@@ -802,7 +812,7 @@ function App() {
     }
   }
 
-  const generateScene = () =>
+  const generateScene = (focus: 'front' | 'bev' | 'recon' = 'front') =>
     runAction(
       'Generate scene',
       () =>
@@ -817,7 +827,7 @@ function App() {
         }),
       (value) => {
         setScene(value)
-        setActiveView('front')
+        setActiveView(focus)
       },
     )
 
@@ -1015,6 +1025,39 @@ function App() {
     replay: 'Policy Replay',
   }[activeView]
 
+  const sequenceOptions = datasets[0]?.sequences ?? ['seq_0001']
+  const showExperimentViewport = activePage === 'dashboard' || activePage === 'scene-lab'
+  const promptLower = prompt.toLowerCase()
+  const promptWeatherConflict =
+    (weather === 'sunny' && /(rain|fog|snow|storm|night|dawn)/.test(promptLower)) ||
+    (weather === 'rain' && /(sunny|clear|dry)/.test(promptLower)) ||
+    (weather === 'fog' && /(clear|sunny)/.test(promptLower))
+  const centerTitle =
+    activePage === 'scene-lab'
+      ? 'Scene Lab Preview'
+      : activePage === 'dataset'
+        ? 'Dataset Workspace'
+        : activePage === 'runs'
+          ? 'Run Registry'
+          : viewLabel
+  const centerSubtitle =
+    activePage === 'scene-lab'
+      ? `${terrain} / ${soil} / ${weather} / ${task}`
+      : activePage === 'dataset'
+        ? `${sequence?.id ?? 'NaN sequence'} / source card / quality / import`
+        : activePage === 'runs'
+          ? `${runs.length} loaded runs / ${runSource}`
+          : `${sequence?.metadata.scene_id ?? 'NaN'} / NaN x NaN / NaNfps / ${sequence?.metadata.difficulty ?? 'NaN'}`
+
+  function loadSequence(id: string) {
+    void runAction('Load sequence', () => api.sequence(id), (value) => {
+      setSequence(value)
+      setFrame(0)
+      setTerrain(value.metadata.terrain)
+      setWeather(value.metadata.weather)
+    })
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -1026,6 +1069,18 @@ function App() {
             {notice}
           </span>
         </div>
+        <nav className="top-nav" aria-label="Workspace views">
+          {pageTabs.map((page) => (
+            <button
+              key={page.value}
+              className={activePage === page.value ? 'active' : ''}
+              onClick={() => setActivePage(page.value)}
+              type="button"
+            >
+              {page.label}
+            </button>
+          ))}
+        </nav>
         <div className="top-actions">
           <span>{terrain} · {weather} · {sequence?.metadata.time_of_day ?? 'NaN'}</span>
           <button className="icon-button" onClick={() => setAutopilot((value) => !value)} title={autopilot ? 'Pause' : 'Play'} type="button">
@@ -1034,8 +1089,110 @@ function App() {
         </div>
       </header>
 
-      <div className="workspace">
+      <div className={`workspace ${activePage}`}>
         <aside className="left-panel">
+          <div className="dashboard-left">
+            <section className="control-block">
+              <div className="section-title">
+                <Database size={14} />
+                Data Workspace
+              </div>
+              <select className="select" value={sequence?.id ?? ''} onChange={(event) => loadSequence(event.target.value)}>
+                {sequenceOptions.map((id) => (
+                  <option key={id} value={id}>{id}</option>
+                ))}
+              </select>
+              <div className="workspace-summary">
+                <span>Current frame</span>
+                <strong>{sequence?.frames.length ? `${frame + 1} / ${sequence.frames.length}` : 'NaN'}</strong>
+              </div>
+              <div className="workspace-summary">
+                <span>Source</span>
+                <strong>{currentSourceCard?.source_type ?? 'NaN'}</strong>
+              </div>
+              <button className="secondary-button" onClick={() => setActivePage('dataset')} type="button">
+                <Database size={15} />
+                Open Dataset
+              </button>
+              <button className="secondary-button" onClick={() => setActivePage('scene-lab')} type="button">
+                <Wand2 size={15} />
+                Open Scene Lab
+              </button>
+            </section>
+            <section className="control-block annotation-card">
+              <div className="section-title">
+                <Tag size={14} />
+                Current Labels
+              </div>
+              <div className="label-summary">
+                <span>terrain</span><b>{terrain}</b>
+                <span>soil</span><b>{soil}</b>
+                <span>weather</span><b>{weather}</b>
+                <span>task</span><b>{task}</b>
+              </div>
+              <textarea className="prompt-box compact-note" value={prompt} onChange={(event) => setPrompt(event.target.value)} />
+              <button className="secondary-button" onClick={saveAnnotation} disabled={loading !== null} type="button">
+                <Tag size={15} />
+                Save label
+              </button>
+            </section>
+            <DatasetQualityPanel quality={currentQuality} />
+          </div>
+
+          <div className="dataset-left">
+            <section className="control-block">
+              <div className="section-title">
+                <Database size={14} />
+                Dataset Import
+              </div>
+              <select className="select" value={sequence?.id ?? ''} onChange={(event) => loadSequence(event.target.value)}>
+                {sequenceOptions.map((id) => (
+                  <option key={id} value={id}>{id}</option>
+                ))}
+              </select>
+              <input className="path-input" value={rugdPath} onChange={(event) => setRugdPath(event.target.value)} placeholder="RUGD root path" />
+              <button className="secondary-button" onClick={importRugd} disabled={loading !== null || rugdPath.trim() === ''} type="button">
+                <Upload size={15} />
+                Import RUGD
+              </button>
+              {rugdImport ? <small className="model-note">Imported {rugdImport.imported_frames} frames as {rugdImport.sequence_id}</small> : null}
+              <input className="path-input" value={tartanPath} onChange={(event) => setTartanPath(event.target.value)} placeholder="TartanDrive mini root path" />
+              <button className="secondary-button" onClick={importTartanDrive} disabled={loading !== null || tartanPath.trim() === ''} type="button">
+                <Upload size={15} />
+                Import TartanDrive
+              </button>
+              {tartanImport ? <small className="model-note">Imported {tartanImport.imported_frames} frames as {tartanImport.sequence_id}</small> : null}
+            </section>
+            <DatasetSourceCardPanel card={currentSourceCard} />
+            <DatasetQualityPanel quality={currentQuality} />
+          </div>
+
+          <div className="runs-left">
+            <section className="control-block scene-lab-intro">
+              <div className="section-title">
+                <Gauge size={14} />
+                Experiment Runs
+              </div>
+              <p>Filter, compare, inspect, and export model or data-generation runs.</p>
+              <button className="secondary-button" onClick={() => void refreshRuns()} type="button">
+                <RefreshCcw size={15} />
+                Refresh runs
+              </button>
+            </section>
+          </div>
+
+          <div className="scene-lab-left-head">
+            <section className="control-block scene-lab-intro">
+              <div className="section-title">
+                <Wand2 size={14} />
+                Scene Lab
+              </div>
+              <p>Structured controls create synthetic BEV, front-view previews, and future video-generation requests.</p>
+              <small>Diffusion video is planned here and remains separate from real-data metrics.</small>
+            </section>
+          </div>
+
+          <div className="legacy-left-controls">
           <section className="control-block">
             <div className="section-title">
               <Database size={14} />
@@ -1093,10 +1250,21 @@ function App() {
               Prompt 生成
             </div>
             <textarea className="prompt-box" value={prompt} onChange={(event) => setPrompt(event.target.value)} />
-            <button className="primary-button" onClick={generateScene} disabled={loading !== null} type="button">
+            {promptWeatherConflict ? <small className="warning-note">Prompt and selected weather may conflict. Keep this output under synthetic provenance.</small> : null}
+            <button className="primary-button" onClick={() => generateScene('front')} disabled={loading !== null} type="button">
               <Wand2 size={16} />
-              Generate scene
+              Generate Image
             </button>
+            <div className="scene-action-grid">
+              <button className="secondary-button" onClick={() => generateScene('bev')} disabled={loading !== null} type="button">
+                <Map size={15} />
+                Generate BEV
+              </button>
+              <button className="secondary-button planned" disabled title="Planned diffusion adapter; no real video model is wired yet." type="button">
+                <Route size={15} />
+                Generate Video
+              </button>
+            </div>
           </section>
 
           <section className="button-stack compact-actions">
@@ -1106,35 +1274,81 @@ function App() {
             </button>
             <small className="action-hint">Model and reconstruction actions are launched from Model Catalog.</small>
           </section>
+          </div>
         </aside>
 
-        <section className="center-panel">
+        <section className={`center-panel ${activePage}`}>
           <div className="view-toolbar">
             <div>
-              <h1>{viewLabel}</h1>
-              <span>{sequence?.metadata.scene_id ?? 'NaN'} · NaN×NaN · NaNfps · {sequence?.metadata.difficulty ?? 'NaN'}</span>
+              <h1>{centerTitle}</h1>
+              <span>{centerSubtitle}</span>
             </div>
             <SourceBadge provenance={viewProvenance} />
-            <div className="view-tabs">
-              {(['front', 'bev', 'terrain', 'trajectory', 'recon', 'predict', 'replay'] as const).map((view) => (
-                <button key={view} className={activeView === view ? 'active' : ''} onClick={() => setActiveView(view)} type="button">
-                  {view}
-                </button>
-              ))}
-            </div>
+            {showExperimentViewport ? (
+              <div className="view-tabs">
+                {(['front', 'bev', 'terrain', 'trajectory', 'recon', 'predict', 'replay'] as const).map((view) => (
+                  <button key={view} className={activeView === view ? 'active' : ''} onClick={() => setActiveView(view)} type="button">
+                    {view}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <div className="main-viewport">
-            {activeView === 'front' ? (
+            {activePage === 'dataset' ? (
+              <div className="page-viewport dataset-workspace">
+                <section className="page-card">
+                  <div className="section-title">
+                    <Database size={14} />
+                    Source Card
+                  </div>
+                  <DatasetSourceCardPanel card={currentSourceCard} />
+                </section>
+                <section className="page-card">
+                  <div className="section-title">
+                    <Gauge size={14} />
+                    Dataset Quality
+                  </div>
+                  <DatasetQualityPanel quality={currentQuality} />
+                </section>
+                <section className="page-card">
+                  <div className="section-title">
+                    <Layers size={14} />
+                    Sequence Metadata
+                  </div>
+                  <JsonBlock value={sequence?.metadata ?? { status: 'NaN' }} />
+                </section>
+              </div>
+            ) : null}
+            {activePage === 'runs' ? (
+              <div className="page-viewport runs-workspace">
+                <section className="page-card wide">
+                  <div className="section-title">
+                    <Database size={14} />
+                    Runs
+                  </div>
+                  <RunRegistryPanel runs={runs} source={runSource} onSourceChange={setRunSource} onSelectRun={openRunDetail} />
+                </section>
+                <section className="page-card">
+                  <div className="section-title">
+                    <Gauge size={14} />
+                    Compare
+                  </div>
+                  <RunComparisonPanel comparison={comparison} kind={compareKind} onKindChange={setCompareKind} />
+                </section>
+              </div>
+            ) : null}
+            {showExperimentViewport && activeView === 'front' ? (
               mainImage ? <img src={mainImage} alt="front camera view" /> : <div className="empty-view">No frame</div>
             ) : null}
-            {activeView === 'bev' ? (
+            {showExperimentViewport && activeView === 'bev' ? (
               <div className="map-grid">
                 <MapImage title="Occupancy" src={occupancyImage} />
                 <MapImage title="Risk" src={riskImage} />
               </div>
             ) : null}
-            {activeView === 'terrain' ? (
+            {showExperimentViewport && activeView === 'terrain' ? (
               <div className="map-grid four">
                 <MapImage title="Overlay" src={perceptionOverlay} />
                 <MapImage title="Semantic groups" src={semanticImage} />
@@ -1142,7 +1356,7 @@ function App() {
                 <MapImage title="Risk" src={perceptionRiskImage} />
               </div>
             ) : null}
-            {activeView === 'trajectory' ? (
+            {showExperimentViewport && activeView === 'trajectory' ? (
               <div className="prediction-grid">
                 <MapImage title="TinyTrajGRU prediction" src={trajectoryImage} />
                 <div className="prediction-table">
@@ -1164,14 +1378,14 @@ function App() {
                 </div>
               </div>
             ) : null}
-            {activeView === 'recon' ? (
+            {showExperimentViewport && activeView === 'recon' ? (
               <div className="map-grid three">
                 <MapImage title="Heightmap" src={heightmapImage} />
                 <MapImage title="Traversability" src={reconstruction?.assets.traversability ?? scene?.assets.traversability ?? ''} />
                 <MapImage title="Risk" src={riskImage} />
               </div>
             ) : null}
-            {activeView === 'predict' ? (
+            {showExperimentViewport && activeView === 'predict' ? (
               <div className="prediction-grid">
                 <MapImage title="Future trajectory" src={predictionImage} />
                 <div className="prediction-table">
@@ -1187,28 +1401,68 @@ function App() {
                 </div>
               </div>
             ) : null}
-            {activeView === 'replay' ? <ReplayMap replay={replay} /> : null}
+            {showExperimentViewport && activeView === 'replay' ? <ReplayMap replay={replay} /> : null}
 
-            <div className="hud-strip">
+            {showExperimentViewport ? <div className="hud-strip">
               <span>Speed <b>NaN</b></span>
               <span>Steer <b>NaN</b></span>
               <span>Pitch <b>NaN</b></span>
               <span>Algo <b>NaN</b></span>
               <span>Traversable <b>{formatPercent(traversableRatio)}</b></span>
               <span>Uncertainty <b>{formatPercent(uncertainty)}</b></span>
-            </div>
+            </div> : null}
           </div>
 
-          <div className="status-bar">
+          {showExperimentViewport ? <div className="status-bar">
             <StatusGauge label="俯仰角" value="NaN" percent={0} color="#19724d" />
             <StatusGauge label="横滚角" value="NaN" percent={0} color="#a97822" />
             <StatusGauge label="可穿越性" value={formatPercent(traversableRatio)} percent={isFiniteNumber(traversableRatio) ? traversableRatio * 100 : 0} color="#0f7a54" />
             <StatusGauge label="LiDAR" value="NaN" percent={0} color="#174c96" />
             <StatusGauge label="Battery" value="NaN" percent={0} color="#207448" />
-          </div>
+          </div> : null}
         </section>
 
         <aside className="right-panel">
+          <div className="scene-lab-right">
+            <section className="right-section">
+              <div className="section-title">
+                <Wand2 size={14} />
+                Generation Outputs
+                <SourceBadge provenance={scene?.provenance} />
+              </div>
+              <MetricSummary metrics={scene?.metrics ?? { bev: Number.NaN, image: Number.NaN, video: Number.NaN }} />
+              <small className="model-note">Video diffusion is an explicit planned adapter. Until wired, video output stays NaN and produces no run.</small>
+            </section>
+            <section className="right-section">
+              <div className="section-title">
+                <Layers size={14} />
+                Scene Spec
+              </div>
+              <JsonBlock value={{ terrain, soil, weather, task, prompt, video_generation: 'planned' }} />
+            </section>
+          </div>
+
+          <div className="dataset-right">
+            <section className="right-section">
+              <div className="section-title">
+                <Brain size={14} />
+                Dataset-Enabled Models
+              </div>
+              <ModelCatalogPanel items={modelCatalog} onLaunch={launchCatalogAction} />
+            </section>
+          </div>
+
+          <div className="runs-right">
+            <section className="right-section">
+              <div className="section-title">
+                <Gauge size={14} />
+                Compare
+              </div>
+              <RunComparisonPanel comparison={comparison} kind={compareKind} onKindChange={setCompareKind} />
+            </section>
+          </div>
+
+          <div className="dashboard-right">
           <section className="right-section">
             <div className="section-title">
               <Brain size={14} />
@@ -1302,6 +1556,7 @@ function App() {
             </button>
             <small>{vehicles.length} configs</small>
           </section>
+          </div>
         </aside>
       </div>
 
