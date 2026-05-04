@@ -176,6 +176,8 @@ function statusText(status: string): string {
     placeholder: 'PLACEHOLDER',
     queued: 'QUEUED',
     completed: 'DONE',
+    cancel_requested: 'CANCEL?',
+    cancelled: 'CANCELLED',
     failed: 'FAILED',
     running: 'RUNNING',
     ready: 'READY',
@@ -427,7 +429,7 @@ function RunComparisonPanel({
   )
 }
 
-function JobQueuePanel({ jobs, onRefresh }: { jobs: JobRecord[]; onRefresh: () => void }) {
+function JobQueuePanel({ jobs, onRefresh, onCancel }: { jobs: JobRecord[]; onRefresh: () => void; onCancel: (jobId: string) => void }) {
   return (
     <div className="jobs-panel">
       <button className="mini-refresh" onClick={onRefresh} type="button">
@@ -440,9 +442,22 @@ function JobQueuePanel({ jobs, onRefresh }: { jobs: JobRecord[]; onRefresh: () =
           <div>
             <strong>{job.label}</strong>
             <small>{job.kind} / {job.sequence_id ?? 'NaN sequence'}</small>
+            <span className="job-progress" title={`${Math.round(job.progress * 100)}%`}>
+              <i style={{ width: `${Math.max(0, Math.min(100, job.progress * 100))}%` }} />
+            </span>
+            <small>{job.logs.at(-1) ?? 'No logs'}</small>
             <small>{new Date(job.updated_at).toLocaleString()}</small>
           </div>
-          <span className={`quality-pill ${job.status}`}>{statusText(job.status)}</span>
+          <div className="job-actions">
+            <span className={`quality-pill ${job.status}`}>{statusText(job.status)}</span>
+            <button
+              disabled={['completed', 'failed', 'cancelled'].includes(job.status)}
+              onClick={() => onCancel(job.job_id)}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       ))}
     </div>
@@ -764,6 +779,34 @@ function App() {
     }
   }
 
+  function mergeJob(job: JobRecord) {
+    setJobs((current) => [job, ...current.filter((item) => item.job_id !== job.job_id)].slice(0, 50))
+  }
+
+  async function waitForJob(jobId: string): Promise<JobRecord> {
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < 180000) {
+      const job = await api.job(jobId)
+      mergeJob(job)
+      if (job.status === 'completed') return job
+      if (job.status === 'failed' || job.status === 'cancelled') {
+        throw new Error(job.error ?? `${job.label} ${job.status}`)
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 700))
+    }
+    throw new Error(`Job timed out: ${jobId}`)
+  }
+
+  async function cancelJob(jobId: string) {
+    try {
+      const job = await api.cancelJob(jobId)
+      mergeJob(job)
+      setNotice(`${job.label}: ${statusText(job.status)}`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Cancel failed')
+    }
+  }
+
   async function refreshQuality() {
     try {
       const loadedQuality = await api.datasetQuality()
@@ -845,7 +888,9 @@ function App() {
       action.label,
       async () => {
         const launched = await api.launchAction(action)
-        const result = launched.result ?? {}
+        mergeJob(launched.job)
+        const completedJob = launched.result ? launched.job : await waitForJob(launched.job.job_id)
+        const result = launched.result ?? completedJob.result ?? {}
         if (action.endpoint === '/api/rl/train' && typeof result.run_id === 'string') {
           const replayData = await api.replay(result.run_id)
           return { result, replayData }
@@ -889,7 +934,9 @@ function App() {
           slope: terrain === 'mountain' ? 0.55 : 0.38,
         }
         const launched = await api.launchJob('Generate scene', '/api/scenes/generate', body)
-        return launched.result as SceneGenerateResponse
+        mergeJob(launched.job)
+        const completedJob = launched.result ? launched.job : await waitForJob(launched.job.job_id)
+        return (launched.result ?? completedJob.result) as SceneGenerateResponse
       },
       (value) => {
         setScene(value)
@@ -1412,7 +1459,7 @@ function App() {
                     <RefreshCcw size={14} />
                     Jobs
                   </div>
-                  <JobQueuePanel jobs={jobs} onRefresh={() => void refreshJobs()} />
+                  <JobQueuePanel jobs={jobs} onRefresh={() => void refreshJobs()} onCancel={(jobId) => void cancelJob(jobId)} />
                 </section>
               </div>
             ) : null}
@@ -1561,7 +1608,7 @@ function App() {
               <RefreshCcw size={14} />
               Jobs
             </div>
-            <JobQueuePanel jobs={jobs} onRefresh={() => void refreshJobs()} />
+            <JobQueuePanel jobs={jobs} onRefresh={() => void refreshJobs()} onCancel={(jobId) => void cancelJob(jobId)} />
           </section>
 
           <section className="right-section">

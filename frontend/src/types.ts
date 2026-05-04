@@ -80,13 +80,15 @@ export type JobRecord = {
   label: string
   endpoint: string
   method: 'POST' | 'GET'
-  status: 'queued' | 'running' | 'completed' | 'failed'
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancel_requested' | 'cancelled'
+  progress: number
   sequence_id: string | null
   source: Provenance['source'] | null
   run_id: string | null
   request: Record<string, unknown>
   result: Record<string, unknown> | null
   error: string | null
+  logs: string[]
   created_at: string
   updated_at: string
 }

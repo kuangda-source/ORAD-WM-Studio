@@ -52,7 +52,7 @@ from .schemas import (
 from .services.annotations import save_annotation
 from .services.datasets import dataset_quality, dataset_source_cards, get_sequence, scan_dataset, sequence_quality, sequence_source_card
 from .services.evaluation import evaluate_run
-from .services.jobs import get_job_record, launch_job, list_job_records
+from .services.jobs import cancel_job_record, get_job_record, launch_job, list_job_records
 from .services.model_catalog import model_catalog
 from .services.public_datasets import import_rugd_dataset, import_tartandrive_dataset
 from .services.reconstruction import run_reconstruction
@@ -140,6 +140,11 @@ def list_jobs(status: str | None = None, kind: str | None = None, limit: int = 5
 @app.get("/api/jobs/{job_id}", response_model=JobRecord)
 def read_job(job_id: str) -> JobRecord:
     return get_job_record(job_id)
+
+
+@app.post("/api/jobs/{job_id}/cancel", response_model=JobRecord)
+def cancel_job(job_id: str) -> JobRecord:
+    return cancel_job_record(job_id)
 
 
 @app.post("/api/jobs/launch", response_model=JobLaunchResponse)

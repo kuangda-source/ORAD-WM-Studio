@@ -51,6 +51,7 @@ export const api = {
   exportRun: (runId: string) => request<RunExportResponse>(`/api/runs/${runId}/export`),
   jobs: () => request<JobRecord[]>('/api/jobs'),
   job: (jobId: string) => request<JobRecord>(`/api/jobs/${jobId}`),
+  cancelJob: (jobId: string) => request<JobRecord>(`/api/jobs/${jobId}/cancel`, { method: 'POST' }),
   datasetQuality: () => request<SequenceQuality[]>('/api/datasets/quality'),
   datasetSourceCards: () => request<DatasetSourceCard[]>('/api/datasets/source-cards'),
   sequenceSourceCard: (id: string) => request<DatasetSourceCard>(`/api/sequences/${id}/source-card`),
@@ -64,13 +65,14 @@ export const api = {
         endpoint: action.endpoint,
         method: action.method,
         body: action.body,
+        run_async: true,
       }),
     })
   },
   launchJob: (label: string, endpoint: string, body: Record<string, unknown>, method: 'POST' | 'GET' = 'POST') =>
     request<JobLaunchResponse>('/api/jobs/launch', {
       method: 'POST',
-      body: JSON.stringify({ label, endpoint, method, body }),
+      body: JSON.stringify({ label, endpoint, method, body, run_async: true }),
     }),
   importRugd: (body: unknown) =>
     request<RUGDImportResponse>('/api/public-datasets/rugd/import', { method: 'POST', body: JSON.stringify(body) }),

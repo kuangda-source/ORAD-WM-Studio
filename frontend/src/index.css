@@ -877,6 +877,44 @@ button:disabled {
   background: #f1f7f4;
 }
 
+.job-actions {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.job-actions button {
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid #d2d9d1;
+  border-radius: 6px;
+  background: #f8faf7;
+  color: #52615a;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.job-actions button:disabled {
+  cursor: not-allowed;
+}
+
+.job-progress {
+  display: block;
+  width: min(190px, 100%);
+  height: 4px;
+  margin: 5px 0 2px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #d8ded7;
+}
+
+.job-progress i {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  background: #176b48;
+}
+
 .run-row strong,
 .run-row small,
 .job-row strong,
@@ -1161,6 +1199,8 @@ button:disabled {
 
 .quality-pill.missing,
 .quality-pill.placeholder,
+.quality-pill.cancel_requested,
+.quality-pill.cancelled,
 .quality-pill.failed,
 .quality-pill.blocked {
   border-color: #d1b3b5;

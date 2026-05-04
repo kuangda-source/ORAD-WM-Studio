@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from fastapi import HTTPException
@@ -84,6 +86,8 @@ JOB_HANDLERS: dict[str, tuple[str, JobHandler]] = {
     "/api/rl/train": ("rl_train", _call_rl_train),
 }
 
+JOB_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="orwm-job")
+
 
 def _job_id(label: str, endpoint: str, body: dict[str, Any]) -> str:
     now = utc_now()
@@ -122,6 +126,47 @@ def _update_job(job: JobRecord, **updates: Any) -> JobRecord:
     return put_job(updated)
 
 
+def _append_log(job: JobRecord, message: str, **updates: Any) -> JobRecord:
+    logs = [*job.logs, f"{utc_now()} {message}"]
+    return _update_job(job, logs=logs[-80:], **updates)
+
+
+def _execute_job(job_id: str) -> JobRecord:
+    job = get_job_record(job_id)
+    if job.status == "cancelled":
+        return job
+    mapped = JOB_HANDLERS.get(job.endpoint)
+    if mapped is None:
+        return _append_log(job, f"Endpoint is not job-launchable: {job.endpoint}", status="failed", progress=1.0, error=f"Endpoint is not job-launchable: {job.endpoint}")
+    _, handler = mapped
+    job = _append_log(job, "Job started.", status="running", progress=0.1)
+    try:
+        time.sleep(0.05)
+        latest = get_job_record(job.job_id)
+        if latest.status == "cancelled":
+            return latest
+        result_model = handler(job.request)
+        result = result_model.model_dump()
+        latest = get_job_record(job.job_id)
+        logs = latest.logs
+        if latest.status == "cancel_requested":
+            logs = [*logs, f"{utc_now()} Cancel was requested after this adapter started; completed because no cooperative checkpoint stopped it."]
+        completed = _update_job(
+            latest,
+            status="completed",
+            progress=1.0,
+            result=result,
+            run_id=_extract_run_id(result),
+            sequence_id=_extract_sequence_id(latest.request, result),
+            source=_extract_source(result),
+            logs=[*logs, f"{utc_now()} Job completed."][-80:],
+        )
+        return completed
+    except Exception as exc:
+        latest = get_job_record(job.job_id)
+        return _append_log(latest, f"Job failed: {exc}", status="failed", progress=1.0, error=str(exc))
+
+
 def launch_job(payload: JobLaunchRequest) -> JobLaunchResponse:
     if payload.method != "POST":
         raise HTTPException(status_code=400, detail="Job launch currently supports POST actions only.")
@@ -137,28 +182,21 @@ def launch_job(payload: JobLaunchRequest) -> JobLaunchResponse:
         endpoint=payload.endpoint,
         method=payload.method,
         status="queued",
+        progress=0.0,
         sequence_id=_extract_sequence_id(payload.body),
         request=payload.body,
+        logs=[f"{now} Job queued."],
         created_at=now,
         updated_at=now,
     )
     job = put_job(job)
-    job = _update_job(job, status="running")
-    try:
-        result_model = handler(payload.body)
-        result = result_model.model_dump()
-        job = _update_job(
-            job,
-            status="completed",
-            result=result,
-            run_id=_extract_run_id(result),
-            sequence_id=_extract_sequence_id(payload.body, result),
-            source=_extract_source(result),
-        )
-        return JobLaunchResponse(job=job, result=result)
-    except Exception as exc:
-        job = _update_job(job, status="failed", error=str(exc))
-        raise HTTPException(status_code=400, detail={"job": job.model_dump(), "error": str(exc)}) from exc
+    if payload.run_async:
+        JOB_EXECUTOR.submit(_execute_job, job.job_id)
+        return JobLaunchResponse(job=job, result=None)
+    completed = _execute_job(job.job_id)
+    if completed.status == "failed":
+        raise HTTPException(status_code=400, detail={"job": completed.model_dump(), "error": completed.error})
+    return JobLaunchResponse(job=completed, result=completed.result)
 
 
 def list_job_records(status: str | None = None, kind: str | None = None, limit: int = 50) -> list[JobRecord]:
@@ -170,3 +208,12 @@ def get_job_record(job_id: str) -> JobRecord:
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     return job
+
+
+def cancel_job_record(job_id: str) -> JobRecord:
+    job = get_job_record(job_id)
+    if job.status in {"completed", "failed", "cancelled"}:
+        return _append_log(job, f"Cancel ignored because job is already {job.status}.")
+    if job.status == "queued":
+        return _append_log(job, "Job cancelled before execution.", status="cancelled", progress=1.0)
+    return _append_log(job, "Cancel requested. Running adapters stop only at cooperative checkpoints.", status="cancel_requested")

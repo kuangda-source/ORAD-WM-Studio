@@ -90,13 +90,15 @@ class JobRecord(BaseModel):
     label: str
     endpoint: str
     method: Literal["POST", "GET"] = "POST"
-    status: Literal["queued", "running", "completed", "failed"] = "queued"
+    status: Literal["queued", "running", "completed", "failed", "cancel_requested", "cancelled"] = "queued"
+    progress: float = Field(default=0.0, ge=0, le=1)
     sequence_id: str | None = None
     source: Literal["real_data", "synthetic", "mock", "toy_env", "placeholder"] | None = None
     run_id: str | None = None
     request: dict[str, Any] = Field(default_factory=dict)
     result: dict[str, Any] | None = None
     error: str | None = None
+    logs: list[str] = Field(default_factory=list)
     created_at: str
     updated_at: str
 
@@ -106,6 +108,7 @@ class JobLaunchRequest(BaseModel):
     endpoint: str
     method: Literal["POST", "GET"] = "POST"
     body: dict[str, Any] = Field(default_factory=dict)
+    run_async: bool = True
 
 
 class JobLaunchResponse(BaseModel):

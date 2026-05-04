@@ -148,6 +148,26 @@
 - diffusion 视频、LiDAR 重建、大模型训练以后都可以接同一个 job API。
 - 参数不再只能用后端默认值，前端可以直接调整 epochs、seed、horizon、frame_index 等。
 
+## 2026-05-05：异步 Job 执行和取消
+
+完成内容：
+
+- `/api/jobs/launch` 从同步执行升级为轻量后台线程执行。
+- JobRecord 增加：
+  - `progress`
+  - `logs`
+  - `cancel_requested`
+  - `cancelled`
+- 新增 `POST /api/jobs/{job_id}/cancel`。
+- 前端启动 Model Catalog / Scene Lab action 后轮询 `/api/jobs/{job_id}`。
+- 任务完成后自动把 `result` 应用到对应视图，例如 reconstruction、trajectory、terrain perception、RL replay。
+- Jobs 面板显示进度条、最近日志、状态和 Cancel 按钮。
+
+优化点：
+
+- 后续 diffusion 视频生成、LiDAR BEV 重建、长时间 PyTorch 训练可以直接复用 job 生命周期。
+- 运行中任务目前是“请求取消”，真正立即停止需要具体 adapter 增加 cooperative checkpoint；这个限制已经在文档中注明。
+
 ## 当前状态
 
 已打通：
@@ -165,11 +185,12 @@
 - source cards / quality cards / model catalog
 - Scene Lab 独立合成数据工作区
 - Job Registry / launch action parameter editor
+- Async job polling / progress / logs / cancel request
 
 仍是占位或待增强：
 
 - diffusion / image-to-video generation adapter
-- 真正异步后台执行器和取消任务
+- cooperative cancellation checkpoints for heavy adapters
 - 真实 LiDAR/depth BEV 重建
 - 完整 TartanDrive 原始格式解析
 - RELLIS-3D LiDAR/camera/calibration adapter

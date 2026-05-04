@@ -305,10 +305,17 @@ Invoke-RestMethod http://127.0.0.1:8000/api/runs/{run_id}/export
 
 ## Job Registry
 
-Model Catalog launch actions and Scene Lab generation now go through a lightweight job layer:
+Model Catalog launch actions and Scene Lab generation now go through a lightweight asynchronous job layer:
 
 ```text
 queued -> running -> completed/failed
+```
+
+Cancellation states:
+
+```text
+queued -> cancelled
+running -> cancel_requested -> completed/failed
 ```
 
 API:
@@ -316,6 +323,7 @@ API:
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/api/jobs
 Invoke-RestMethod http://127.0.0.1:8000/api/jobs/{job_id}
+Invoke-RestMethod http://127.0.0.1:8000/api/jobs/{job_id}/cancel -Method Post
 ```
 
 Launch through the job API:
@@ -327,7 +335,7 @@ Invoke-RestMethod http://127.0.0.1:8000/api/jobs/launch `
   -Body '{"label":"Reconstruct","endpoint":"/api/reconstruction/run","method":"POST","body":{"sequence_id":"seq_0001","method":"mock-bev","seed":17}}'
 ```
 
-The current implementation executes synchronously while recording lifecycle state. That keeps the demo responsive and gives future long-running adapters a stable API shape. The frontend shows recent jobs and exposes editable JSON params for every Model Catalog launch action.
+The current implementation uses a small background thread executor while recording lifecycle state, progress, and logs. Running jobs support cancel requests; immediate interruption requires future heavy adapters to add cooperative checkpoints. The frontend polls jobs, shows recent job status, and exposes editable JSON params for every Model Catalog launch action.
 
 ## Dataset Quality
 

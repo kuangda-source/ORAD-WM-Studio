@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pytest
@@ -176,16 +177,46 @@ def test_generation_reconstruction_training_and_replay() -> None:
                 "endpoint": "/api/reconstruction/run",
                 "method": "POST",
                 "body": {"sequence_id": "seq_0001", "method": "mock-bev", "seed": 91},
+                "run_async": False,
             },
         )
         assert job_launch.status_code == 200
         job_payload = job_launch.json()
         assert job_payload["job"]["status"] == "completed"
         assert job_payload["job"]["kind"] == "reconstruction"
+        assert job_payload["job"]["progress"] == 1.0
+        assert job_payload["job"]["logs"]
         assert job_payload["job"]["run_id"] == job_payload["result"]["run_id"]
         jobs = client.get("/api/jobs")
         assert jobs.status_code == 200
         assert any(item["job_id"] == job_payload["job"]["job_id"] for item in jobs.json())
+
+        async_job = client.post(
+            "/api/jobs/launch",
+            json={
+                "label": "Generate scene",
+                "endpoint": "/api/scenes/generate",
+                "method": "POST",
+                "body": {"terrain": "mountain", "weather": "sunny", "task": "trail", "prompt": "pytest async scene", "seed": 123},
+            },
+        )
+        assert async_job.status_code == 200
+        async_id = async_job.json()["job"]["job_id"]
+        final_job = None
+        for _ in range(30):
+            polled = client.get(f"/api/jobs/{async_id}")
+            assert polled.status_code == 200
+            final_job = polled.json()
+            if final_job["status"] == "completed":
+                break
+            time.sleep(0.1)
+        assert final_job is not None
+        assert final_job["status"] == "completed"
+        assert final_job["result"]["scene_id"]
+        assert final_job["progress"] == 1.0
+        cancel_completed = client.post(f"/api/jobs/{async_id}/cancel")
+        assert cancel_completed.status_code == 200
+        assert cancel_completed.json()["status"] == "completed"
 
 
 def test_rugd_style_import_endpoint() -> None:

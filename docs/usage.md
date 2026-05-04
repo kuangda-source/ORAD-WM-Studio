@@ -98,11 +98,21 @@ Model Catalog 和 Scene Lab 的启动动作现在先进入 Job Registry：
 queued -> running -> completed/failed
 ```
 
+取消时会出现：
+
+```text
+queued -> cancelled
+running -> cancel_requested -> completed/failed
+```
+
+说明：当前 adapters 大多还是单段同步函数，运行中任务可以记录 cancel request，但真正立即中断需要后续每个重型 adapter 增加 cooperative checkpoint。
+
 API：
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/api/jobs
 Invoke-RestMethod http://127.0.0.1:8000/api/jobs/{job_id}
+Invoke-RestMethod http://127.0.0.1:8000/api/jobs/{job_id}/cancel -Method Post
 ```
 
 通过 job 统一启动动作：
@@ -114,7 +124,7 @@ Invoke-RestMethod http://127.0.0.1:8000/api/jobs/launch `
   -Body '{"label":"Reconstruct","endpoint":"/api/reconstruction/run","method":"POST","body":{"sequence_id":"seq_0001","method":"mock-bev","seed":17}}'
 ```
 
-当前实现是“同步执行 + 状态记录”，目的是兼容现有 demo 并把接口形状固定下来。后续 diffusion、LiDAR 重建和更重的 PyTorch 训练可以把同一个 job API 替换成真正后台执行。
+当前实现已经是轻量后台线程执行，`/api/jobs/launch` 会先返回 job，前端轮询直到完成。后续 diffusion、LiDAR 重建和更重的 PyTorch 训练可以继续复用同一个 job API。
 
 前端：
 
@@ -122,6 +132,7 @@ Invoke-RestMethod http://127.0.0.1:8000/api/jobs/launch `
 - Runs 页面也显示最近 jobs。
 - 每个 Model Catalog launch action 都有 `params` JSON 编辑器。
 - JSON 非法时按钮禁用，不会提交半坏参数。
+- Job 面板显示状态、进度条、最近日志和 Cancel 按钮。
 
 ## 7. 导入 RUGD-style 数据
 
