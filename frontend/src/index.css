@@ -510,6 +510,50 @@ button:disabled {
   color: #146246;
 }
 
+.terrain-stack {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr);
+  background: #e8ece7;
+}
+
+.layer-switch {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  border-bottom: 1px solid #d4dcd2;
+  background: #f8faf6;
+}
+
+.layer-switch button {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid #d5ddd4;
+  border-radius: 6px;
+  background: #f8faf7;
+  color: #4d5e56;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.layer-switch button.active {
+  border-color: #83bca8;
+  background: #e6f1ed;
+  color: #146246;
+}
+
+.layer-switch span {
+  min-width: 0;
+  overflow: hidden;
+  color: #6a7670;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .main-viewport {
   position: relative;
   min-height: 0;

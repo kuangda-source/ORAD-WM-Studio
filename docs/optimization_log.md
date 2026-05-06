@@ -225,3 +225,16 @@
 - 先训练 action-conditioned BEV predictor。
 - 再把 predicted risk 接到 planner。
 - RL 继续保持 toy，直到有 simulator 或真实 offline evaluator。
+
+## 2026-05-06: Terrain perception view state fix
+
+Completed:
+- Split Terrain Perception into `Dataset semantic` and `Model segment` display modes.
+- Kept dataset semantic labels as the default terrain view after a model segment run.
+- Bound `Segment Frame` outputs to the exact frame that produced them.
+- When the user steps to another frame, stale single-frame segment artifacts are hidden and the current frame dataset label is shown instead.
+- Terrain risk now stays empty by default; it only appears when the current frame has a model segment risk artifact.
+
+Optimization notes:
+- This avoids mistaking a one-frame terrain model output for a video segmentation result.
+- Future video/batch segmentation can replace this behavior by writing per-frame artifacts and marking provenance for each frame.

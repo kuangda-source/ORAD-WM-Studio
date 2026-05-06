@@ -667,6 +667,7 @@ function App() {
   const [travTrain, setTravTrain] = useState<TraversabilityTrainResponse | null>(null)
   const [travPrediction, setTravPrediction] = useState<TraversabilityPredictResponse | null>(null)
   const [travPredictionFrame, setTravPredictionFrame] = useState<number | null>(null)
+  const [terrainLayerMode, setTerrainLayerMode] = useState<'semantic' | 'segment'>('semantic')
   const [trajTrain, setTrajTrain] = useState<TrajectoryTrainResponse | null>(null)
   const [trajPrediction, setTrajPrediction] = useState<TrajectoryPredictResponse | null>(null)
   const [rugdImport, setRugdImport] = useState<RUGDImportResponse | null>(null)
@@ -731,25 +732,38 @@ function App() {
   const occupancyImage = reconstruction?.assets.occupancy ?? scene?.assets.occupancy ?? sequence?.occupancy[0] ?? ''
   const heightmapImage = reconstruction?.assets.heightmap ?? scene?.assets.heightmap ?? sequence?.occupancy.find((item) => item.includes('heightmap')) ?? ''
   const riskImage = prediction?.assets.risk ?? reconstruction?.assets.risk ?? scene?.assets.risk ?? sequence?.occupancy.find((item) => item.includes('risk')) ?? ''
-  const semanticImage = travPrediction?.assets.semantic ?? sequence?.labels?.[frame] ?? ''
-  const traversabilityImage = travPrediction?.assets.traversability ?? reconstruction?.assets.traversability ?? scene?.assets.traversability ?? ''
-  const perceptionRiskImage = travPrediction?.assets.risk ?? riskImage
-  const perceptionOverlay = travPrediction?.assets.overlay ?? mainImage
+  const datasetSemanticImage = sequence?.labels?.[frame] ?? ''
+  const segmentMatchesFrame = travPrediction !== null && travPredictionFrame === frame
+  const showSegmentResult = terrainLayerMode === 'segment' && segmentMatchesFrame
+  const terrainSecondaryImage = showSegmentResult ? travPrediction?.assets.overlay ?? '' : datasetSemanticImage
+  const terrainTraversabilityImage = showSegmentResult ? travPrediction?.assets.traversability ?? '' : ''
+  const terrainRiskImage = showSegmentResult ? travPrediction?.assets.risk ?? '' : ''
   const trajectoryImage = trajPrediction?.assets.trajectory ?? ''
   const predictionImage = prediction?.assets.future_trajectory ?? prediction?.assets.occupancy ?? ''
   const successRate = rlTrain?.metrics.success_rate ?? Number.NaN
   const collisionRate = rlTrain?.metrics.collision_rate ?? Number.NaN
   const pathLength = rlTrain?.metrics.path_length_m ?? Number.NaN
   const uncertainty = prediction?.uncertainty ?? Number.NaN
-  const traversableRatio = travPrediction?.metrics.traversable_ratio ?? Number.NaN
-  const terrainRisk = travPrediction?.metrics.risk_score ?? Number.NaN
+  const traversableRatio = showSegmentResult ? travPrediction?.metrics.traversable_ratio ?? Number.NaN : Number.NaN
+  const terrainRisk = showSegmentResult ? travPrediction?.metrics.risk_score ?? Number.NaN : Number.NaN
   const trajectoryAde = trajPrediction?.metrics.ade ?? Number.NaN
   const trajectoryFde = trajPrediction?.metrics.fde ?? Number.NaN
   const trainCurveData = trajTrain?.training_curve ?? travTrain?.training_curve ?? wmTrain?.metrics ?? []
   const trainCurveField = trajTrain ? 'ade' : travTrain ? 'pixel_acc' : wmTrain ? 'bev_iou' : 'loss'
+  const semanticProvenance: Provenance | null = datasetSemanticImage
+    ? {
+        source: 'real_data',
+        label: 'Dataset semantic labels',
+        notes: [`frame ${frame + 1}`],
+        components: { semantic_mask: 'dataset label mask' },
+        data_sources: sequence?.id ? [sequence.id] : [],
+      }
+    : null
   const viewProvenance =
     activeView === 'terrain'
-      ? travPrediction?.provenance ?? travTrain?.provenance
+      ? showSegmentResult
+        ? travPrediction?.provenance
+        : semanticProvenance
       : activeView === 'trajectory'
         ? trajPrediction?.provenance ?? trajTrain?.provenance
         : activeView === 'recon'
@@ -761,7 +775,7 @@ function App() {
               : activeView === 'bev'
                 ? reconstruction?.provenance ?? scene?.provenance
                 : scene?.provenance
-  const metricProvenance = rlTrain?.provenance ?? travPrediction?.provenance
+  const metricProvenance = rlTrain?.provenance ?? (showSegmentResult ? travPrediction?.provenance : undefined)
   const currentQuality = qualities.find((item) => item.sequence_id === sequence?.id)
   const currentSourceCard = sourceCards.find((item) => item.sequence_id === sequence?.id)
   const runtimeModelCatalog = useMemo(
@@ -896,6 +910,7 @@ function App() {
       case '/api/traversability/predict':
         setTravPrediction(result as TraversabilityPredictResponse)
         setTravPredictionFrame(parseFrameIndex(action.body.frame_index) ?? frame)
+        setTerrainLayerMode('segment')
         setActiveView('terrain')
         break
       case '/api/trajectory/train':
@@ -1047,6 +1062,9 @@ function App() {
         setDatasets([result.dataset])
         setSequence(detail)
         setFrame(0)
+        setTravPrediction(null)
+        setTravPredictionFrame(null)
+        setTerrainLayerMode('semantic')
         setTerrain(detail.metadata.terrain)
         setWeather(detail.metadata.weather)
         setActiveView('front')
@@ -1071,6 +1089,9 @@ function App() {
         setDatasets([result.dataset])
         setSequence(detail)
         setFrame(0)
+        setTravPrediction(null)
+        setTravPredictionFrame(null)
+        setTerrainLayerMode('semantic')
         setTerrain(detail.metadata.terrain)
         setWeather(detail.metadata.weather)
         setActiveView('front')
@@ -1089,6 +1110,7 @@ function App() {
       (value) => {
         setTravPrediction(value)
         setTravPredictionFrame(frame)
+        setTerrainLayerMode('segment')
         setActiveView('terrain')
       },
     )
@@ -1203,6 +1225,9 @@ function App() {
     void runAction('Load sequence', () => api.sequence(id), (value) => {
       setSequence(value)
       setFrame(0)
+      setTravPrediction(null)
+      setTravPredictionFrame(null)
+      setTerrainLayerMode('semantic')
       setTerrain(value.metadata.terrain)
       setWeather(value.metadata.weather)
     })
@@ -1375,6 +1400,9 @@ function App() {
                 void runAction('Load sequence', () => api.sequence(id), (value) => {
                   setSequence(value)
                   setFrame(0)
+                  setTravPrediction(null)
+                  setTravPredictionFrame(null)
+                  setTerrainLayerMode('semantic')
                 })
               }}
             >
@@ -1525,11 +1553,34 @@ function App() {
               </div>
             ) : null}
             {showExperimentViewport && activeView === 'terrain' ? (
-              <div className="map-grid four">
-                <MapImage title="Live frame" src={mainImage} />
-                <MapImage title={travPrediction ? `Segment overlay f${travPredictionFrame ?? 'NaN'}` : 'Semantic groups'} src={travPrediction ? perceptionOverlay : semanticImage} />
-                <MapImage title={travPrediction ? `Traversability f${travPredictionFrame ?? 'NaN'}` : 'Traversability'} src={traversabilityImage} />
-                <MapImage title={travPrediction ? `Risk f${travPredictionFrame ?? 'NaN'}` : 'Risk'} src={perceptionRiskImage} />
+              <div className="terrain-stack">
+                <div className="layer-switch">
+                  <button className={!showSegmentResult ? 'active' : ''} onClick={() => setTerrainLayerMode('semantic')} type="button">
+                    Dataset semantic
+                  </button>
+                  <button
+                    className={showSegmentResult ? 'active' : ''}
+                    disabled={!travPrediction}
+                    onClick={() => setTerrainLayerMode('segment')}
+                    title={travPredictionFrame !== null ? `Segment result belongs to frame ${travPredictionFrame + 1}` : 'No segment result yet'}
+                    type="button"
+                  >
+                    Model segment {travPredictionFrame !== null ? `f${travPredictionFrame + 1}` : ''}
+                  </button>
+                  <span>
+                    {terrainLayerMode === 'segment' && travPrediction && !segmentMatchesFrame
+                      ? `Segment is single-frame: f${travPredictionFrame !== null ? travPredictionFrame + 1 : 'NaN'}, current f${frame + 1}. Showing dataset labels.`
+                      : datasetSemanticImage
+                        ? `Dataset label frame ${frame + 1}`
+                        : 'No semantic label for this frame'}
+                  </span>
+                </div>
+                <div className="map-grid four">
+                  <MapImage title="Live frame" src={mainImage} />
+                  <MapImage title={showSegmentResult ? `Segment overlay f${frame + 1}` : 'Semantic groups'} src={terrainSecondaryImage} />
+                  <MapImage title={showSegmentResult ? `Traversability f${frame + 1}` : 'Traversability'} src={terrainTraversabilityImage} />
+                  <MapImage title={showSegmentResult ? `Risk f${frame + 1}` : 'Risk'} src={terrainRiskImage} />
+                </div>
               </div>
             ) : null}
             {showExperimentViewport && activeView === 'trajectory' ? (
